@@ -1,6 +1,6 @@
 """
 =============================================================
-  STEP 1: Environment & Basic Capture
+  capture.py — Environment & Basic Capture
   Network Packet Sniffer - Python Raw Sockets
 =============================================================
 
@@ -107,7 +107,7 @@ def create_raw_socket():
     except PermissionError:
         print("\n[ERROR] Permission denied!")
         print("  → Windows: Run this script as Administrator")
-        print("  → Linux:   Run with 'sudo python3 step1_capture.py'")
+        print("  → Linux:   Run with 'sudo python3 capture.py'")
         sys.exit(1)
     except OSError as e:
         print(f"\n[ERROR] Could not create raw socket: {e}")
@@ -174,7 +174,7 @@ def cleanup(raw_sock, is_windows):
 
 def main():
     print("=" * 60)
-    print("  STEP 1: Network Packet Sniffer - Basic Capture")
+    print("  Network Packet Sniffer - Basic Capture")
     print("=" * 60)
     print()
 
@@ -193,7 +193,7 @@ def main():
         # 4. Always clean up: disable promiscuous mode and close socket
         cleanup(raw_sock, is_windows)
 
-    print("\n[*] Done. In Step 2, we will parse the Ethernet frame headers.")
+    print("\n[*] Done. See ethernet.py to parse the Ethernet frame headers.")
 
 
 if __name__ == "__main__":

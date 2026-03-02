@@ -1,6 +1,6 @@
 """
 =============================================================
-  STEP 2: Unpacking the Ethernet Frame
+  ethernet.py — Unpacking the Ethernet Frame
   Network Packet Sniffer - Python Raw Sockets
 =============================================================
 
@@ -48,7 +48,7 @@ import os
 # ────────────────────────── Socket Helpers ──────────────────────────
 
 def create_raw_socket():
-    """Create a raw socket (same as Step 1)."""
+    """Create a raw socket (same as capture.py)."""
     try:
         if os.name == 'nt':
             raw_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
@@ -163,7 +163,7 @@ def display_ethernet_frame(frame, packet_num):
 
 def main():
     print("=" * 60)
-    print("  STEP 2: Ethernet Frame Parser")
+    print("  Ethernet Frame Parser")
     print("  Press Ctrl+C to stop.")
     print("=" * 60)
 
@@ -194,7 +194,7 @@ def main():
         cleanup(raw_sock, is_windows)
         print("[*] Socket closed.")
     
-    print("\n[*] In Step 3, we will parse the IPv4 header inside the payload.")
+    print("\n[*] See ip_parser.py to parse the IPv4 header inside the payload.")
 
 
 if __name__ == "__main__":

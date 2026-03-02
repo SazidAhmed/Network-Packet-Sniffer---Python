@@ -1,6 +1,6 @@
 """
 =============================================================
-  STEP 3: Unpacking the IP Header
+  ip_parser.py — Unpacking the IP Header
   Network Packet Sniffer - Python Raw Sockets
 =============================================================
 
@@ -225,7 +225,7 @@ def display_packet(eth_type, ip, packet_num):
 
 def main():
     print("=" * 60)
-    print("  STEP 3: IPv4 Header Parser")
+    print("  IPv4 Header Parser")
     print("  Press Ctrl+C to stop.")
     print("=" * 60)
 
@@ -262,7 +262,7 @@ def main():
         cleanup(raw_sock, is_windows)
         print("[*] Socket closed.")
 
-    print("\n[*] In Step 4, we will parse the TCP/UDP transport layer headers.")
+    print("\n[*] See transport.py to parse the TCP/UDP transport layer headers.")
 
 
 if __name__ == "__main__":

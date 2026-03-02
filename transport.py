@@ -1,6 +1,6 @@
 """
 =============================================================
-  STEP 4: Unpacking the Transport Layer (TCP & UDP)
+  transport.py — Unpacking the Transport Layer (TCP & UDP)
   Network Packet Sniffer - Python Raw Sockets
 =============================================================
 
@@ -274,7 +274,7 @@ def display_packet(eth_type, ip, tcp=None, udp=None, pkt_num=0):
 
 def main():
     print("=" * 62)
-    print("  STEP 4: TCP/UDP Transport Layer Parser")
+    print("  TCP/UDP Transport Layer Parser")
     print("  Press Ctrl+C to stop.")
     print("=" * 62)
 
@@ -318,7 +318,7 @@ def main():
         cleanup(raw_sock, is_windows)
         print("[*] Socket closed.")
 
-    print("\n[*] All 4 steps complete! See sniffer.py for the full combined version.")
+    print("\n[*] All layers complete! See sniffer.py for the full combined version.")
 
 
 if __name__ == "__main__":

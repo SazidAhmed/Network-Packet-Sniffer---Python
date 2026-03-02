@@ -1,7 +1,7 @@
 """
 =============================================================
   NETWORK PACKET SNIFFER — Combined Full Version
-  All 4 layers: Ethernet → IP → TCP/UDP/ICMP
+  All layers: Ethernet → IPv4/IPv6 → TCP/UDP/ICMP
   No third-party libraries — pure Python stdlib only.
 =============================================================
 
@@ -12,9 +12,10 @@
     sudo python3 sniffer.py
 
   Optional flags:
-    python sniffer.py --count 50       # Stop after 50 packets
-    python sniffer.py --proto tcp      # Filter: tcp | udp | icmp | all
-    python sniffer.py --no-color       # Disable ANSI colors
+    python sniffer.py --count 50          # Stop after 50 packets
+    python sniffer.py --proto tcp         # Filter: tcp | udp | icmp | ipv6 | all
+    python sniffer.py --host 192.168.1.5  # Bind to a specific interface (Windows)
+    python sniffer.py --no-color          # Disable ANSI colors
 """
 
 import socket
@@ -79,19 +80,22 @@ def port_label(port):
 
 # ─────────────────────────── Raw Socket Setup ───────────────────────────
 
-def create_raw_socket():
+def create_raw_socket(host=None):
     """
     Create a platform-appropriate raw socket.
-    Exits with a clear error message if privileges are insufficient.
+
+    host (Windows only): IP address of the interface to bind to.
+      Defaults to socket.gethostbyname(socket.gethostname()).
+      Use --host to specify a different interface, e.g. a VPN or Wi-Fi adapter.
     """
     try:
         if os.name == 'nt':  # Windows
             sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
-            host = socket.gethostbyname(socket.gethostname())
-            sock.bind((host, 0))
+            bound_host = host or socket.gethostbyname(socket.gethostname())
+            sock.bind((bound_host, 0))
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
             sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
-            return sock, True, host
+            return sock, True, bound_host
         else:  # Linux / macOS
             sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
             return sock, False, socket.gethostname()
@@ -216,6 +220,44 @@ def parse_icmp(data):
     }
 
 
+def parse_ipv6(data):
+    """
+    Parse the fixed 40-byte IPv6 header.
+
+    IPv6 header structure:
+      4B  Version(4) + Traffic Class(8) + Flow Label(20) — packed
+      2B  Payload Length
+      1B  Next Header  (like IPv4 Protocol: 6=TCP, 17=UDP, 58=ICMPv6)
+      1B  Hop Limit    (like IPv4 TTL)
+      16B Source Address
+      16B Destination Address
+    Total = 40 bytes (fixed, no options field — extensions are chained via Next Header)
+
+    socket.inet_ntop(AF_INET6, ...) formats 16 raw bytes as a proper IPv6 address
+    e.g. b'\x20\x01...' → '2001:4860:4860::8888'
+    """
+    if len(data) < 40:
+        return None
+    # First 4 bytes: version/TC/flow packed — we unpack as one big-endian uint32
+    vtf, payload_len, next_hdr, hop_limit = struct.unpack('!IHBB', data[:8])
+    version = (vtf >> 28) & 0xF          # top 4 bits
+    src_raw = data[8:24]
+    dst_raw = data[24:40]
+    src_ip = socket.inet_ntop(socket.AF_INET6, src_raw)
+    dst_ip = socket.inet_ntop(socket.AF_INET6, dst_raw)
+    next_names = {6: 'TCP', 17: 'UDP', 58: 'ICMPv6', 43: 'Routing', 44: 'Fragment'}
+    return {
+        'version':     version,
+        'payload_len': payload_len,
+        'next_hdr':    next_hdr,
+        'next_name':   next_names.get(next_hdr, f'?({next_hdr})'),
+        'hop_limit':   hop_limit,
+        'src_ip':      src_ip,
+        'dst_ip':      dst_ip,
+        'payload':     data[40:],
+    }
+
+
 # ─────────────────────────── Display ───────────────────────────
 
 THICK = '═' * 64
@@ -242,14 +284,15 @@ def flag_color(flag_str):
     return C.WHITE
 
 
-def display_packet(eth, ip, tcp=None, udp=None, icmp=None, pkt_num=0, is_windows=True):
+def display_packet(eth, ip, tcp=None, udp=None, icmp=None, ipv6=None, pkt_num=0, is_windows=True):
     ts = datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]
-    pc = proto_color(ip['proto_name']) if ip else C.WHITE
+    proto_label = 'IPv6' if ipv6 and not ip else (ip['proto_name'] if ip else 'N/A')
+    pc = proto_color(proto_label)
 
     print(f"\n{C.GRAY}{THICK}{C.RESET}")
     print(f"  {C.BOLD}{C.WHITE}#{pkt_num:<5}{C.RESET}  "
           f"{C.GRAY}{ts}{C.RESET}  "
-          f"{pc}{C.BOLD}{ip['proto_name'] if ip else 'N/A':6}{C.RESET}")
+          f"{pc}{C.BOLD}{proto_label:6}{C.RESET}")
     print(f"{C.GRAY}{THIN}{C.RESET}")
 
     # Ethernet
@@ -260,7 +303,14 @@ def display_packet(eth, ip, tcp=None, udp=None, icmp=None, pkt_num=0, is_windows
               f"{C.GRAY}{eth['dst']}{C.RESET}  "
               f"[{eth_name}]")
 
-    # IP
+    # IPv6
+    if ipv6 and not ip:
+        print(f"  {C.BLUE}IPv6{C.RESET} {C.WHITE}{ipv6['src_ip']}{C.RESET}")
+        print(f"       → {C.WHITE}{ipv6['dst_ip']}{C.RESET}")
+        print(f"       Hop Limit: {ipv6['hop_limit']}  Next: {ipv6['next_name']}  Payload: {ipv6['payload_len']}B")
+        return
+
+    # IPv4
     if ip:
         print(f"  {C.BLUE}IP {C.RESET}  "
               f"{C.WHITE}{ip['src_ip']:<15}{C.RESET} → "
@@ -332,18 +382,22 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python sniffer.py                   # Capture 100 packets (all protocols)
-  python sniffer.py --count 50        # Stop after 50 packets
-  python sniffer.py --proto tcp       # TCP only
-  python sniffer.py --proto udp       # UDP only
-  python sniffer.py --proto icmp      # ICMP only
-  python sniffer.py --no-color        # Disable ANSI colors
+  python sniffer.py                        # Capture 100 packets (all protocols)
+  python sniffer.py --count 50             # Stop after 50 packets
+  python sniffer.py --proto tcp            # TCP only
+  python sniffer.py --proto udp            # UDP only
+  python sniffer.py --proto icmp           # ICMP only
+  python sniffer.py --proto ipv6           # IPv6 frames only
+  python sniffer.py --host 192.168.1.5     # Bind to specific interface (Windows)
+  python sniffer.py --no-color             # Disable ANSI colors
         """
     )
     p.add_argument('--count',    type=int,   default=100,   help='Packets to capture (default: 100)')
     p.add_argument('--proto',    type=str,   default='all',
-                   choices=['all', 'tcp', 'udp', 'icmp'],   help='Filter by protocol')
-    p.add_argument('--no-color', action='store_true',        help='Disable colored output')
+                   choices=['all', 'tcp', 'udp', 'icmp', 'ipv6'], help='Filter by protocol')
+    p.add_argument('--host',     type=str,   default=None,
+                   help='(Windows) IP of the interface to bind to. Default: auto-detect.')
+    p.add_argument('--no-color', action='store_true', help='Disable colored output')
     return p.parse_args()
 
 
@@ -360,16 +414,18 @@ def main():
 
     print(f"{C.BOLD}{C.CYAN}")
     print("  ╔══════════════════════════════════════════════════════════╗")
-    print("  ║          NETWORK PACKET SNIFFER  —  Pure Python         ║")
-    print("  ║    Layers: Ethernet → IPv4 → TCP / UDP / ICMP           ║")
+    print("  ║       NETWORK PACKET SNIFFER  —  Pure Python            ║")
+    print("  ║   Layers: Ethernet → IPv4/IPv6 → TCP / UDP / ICMP       ║")
     print("  ╚══════════════════════════════════════════════════════════╝")
     print(C.RESET)
 
-    sock, is_windows, host = create_raw_socket()
+    sock, is_windows, host = create_raw_socket(host=args.host)
     print(f"  {C.GREEN}[✓]{C.RESET} Socket ready  |  Platform: "
-          f"{'Windows' if is_windows else 'Linux/macOS'}  |  Host: {host}")
+          f"{'Windows' if is_windows else 'Linux/macOS'}  |  Interface: {host}")
     print(f"  {C.GREEN}[✓]{C.RESET} Protocol filter: {args.proto.upper()}  |  "
           f"Max packets: {args.count}")
+    if args.host and is_windows:
+        print(f"  {C.GREEN}[✓]{C.RESET} Bound to user-specified host: {args.host}")
     print(f"  {C.YELLOW}[!]{C.RESET} Generating traffic? Try: ping google.com")
     print(f"  {C.GRAY}Press Ctrl+C to stop early.{C.RESET}\n")
 
@@ -387,10 +443,22 @@ def main():
             ethertype = eth['ethertype']
             ip_data = eth['payload']
 
-            if ethertype != 0x0800:
-                continue  # Only process IPv4
+            # ── IPv6 (EtherType 0x86DD) ──
+            if ethertype == 0x86DD:
+                if args.proto not in ('all', 'ipv6'):
+                    continue
+                ipv6 = parse_ipv6(ip_data)
+                if not ipv6:
+                    continue
+                pkt_num += 1
+                stats.record('IPv6', ipv6['payload_len'])
+                display_packet(eth, None, ipv6=ipv6, pkt_num=pkt_num, is_windows=is_windows)
+                continue
 
-            # ── IP ──
+            if ethertype != 0x0800:
+                continue  # Skip non-IPv4, non-IPv6
+
+            # ── IPv4 ──
             ip = parse_ipv4(ip_data)
             if not ip:
                 continue
