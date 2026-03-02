@@ -1,0 +1,86 @@
+services:
+
+  # ──────────────────────────────────────────────────────────────
+  #  sniffer — Full combined sniffer (default: 50 packets)
+  #
+  #  Run:  docker compose run --rm sniffer
+  #  Args: docker compose run --rm sniffer python sniffer.py --proto tcp
+  # ──────────────────────────────────────────────────────────────
+  sniffer:
+    build: .
+    image: packet-sniffer
+    stdin_open: true
+    tty: true
+
+    # ── Linux capabilities required for raw sockets ──
+    # NET_RAW   → allows creating raw/packet sockets (AF_PACKET, SOCK_RAW)
+    # NET_ADMIN → allows interface configuration and promiscuous mode
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+
+    # ── Use the host machine's network stack ──
+    # Without this, the container is isolated inside Docker's bridge network
+    # and only sees container-to-container traffic.
+    # With host mode, the container shares the real NIC — same as running
+    # the sniffer directly on the machine.
+    #
+    # NOTE on Windows + Docker Desktop (WSL2):
+    #   Docker runs inside a lightweight Linux VM (WSL2). "host" here means
+    #   the WSL2 VM's network, not the Windows host network adapter.
+    #   You will capture Docker/WSL2 internal traffic + any traffic you
+    #   generate inside WSL2 (e.g. curl, ping from a WSL2 terminal).
+    #   To see Windows browser traffic, generate traffic from inside WSL2:
+    #     docker compose exec sniffer ping 8.8.8.8
+    network_mode: host
+
+    # Default: run the full sniffer for 50 packets
+    command: ["python", "sniffer.py", "--count", "50"]
+
+  # ──────────────────────────────────────────────────────────────
+  #  capture — Step 1: capture one raw packet (hex dump)
+  # ──────────────────────────────────────────────────────────────
+  capture:
+    build: .
+    image: packet-sniffer
+    stdin_open: true
+    tty: true
+    cap_add: [NET_RAW, NET_ADMIN]
+    network_mode: host
+    command: ["python", "capture.py"]
+
+  # ──────────────────────────────────────────────────────────────
+  #  ethernet — Step 2: Ethernet frame parser
+  # ──────────────────────────────────────────────────────────────
+  ethernet:
+    build: .
+    image: packet-sniffer
+    stdin_open: true
+    tty: true
+    cap_add: [NET_RAW, NET_ADMIN]
+    network_mode: host
+    command: ["python", "ethernet.py"]
+
+  # ──────────────────────────────────────────────────────────────
+  #  ip — Step 3: IPv4 header parser
+  # ──────────────────────────────────────────────────────────────
+  ip:
+    build: .
+    image: packet-sniffer
+    stdin_open: true
+    tty: true
+    cap_add: [NET_RAW, NET_ADMIN]
+    network_mode: host
+    command: ["python", "ip_parser.py"]
+
+  # ──────────────────────────────────────────────────────────────
+  #  transport — Step 4: TCP/UDP/ICMP transport layer parser
+  # ──────────────────────────────────────────────────────────────
+  transport:
+    build: .
+    image: packet-sniffer
+    stdin_open: true
+    tty: true
+    cap_add: [NET_RAW, NET_ADMIN]
+    network_mode: host
+    command: ["python", "transport.py"]

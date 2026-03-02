@@ -1,0 +1,26 @@
+Network Packet Sniffer (Python)
+Goal: Master raw sockets, promiscuous mode, and binary header parsing.
+
+Step 1: Environment & Basic Capture
+
+Task for Claude: "Write a Python script using the socket library (not Scapy yet) that creates a raw socket and captures a single network packet. Explain the need for root/administrator privileges when using raw sockets."
+
+Architecture Focus: Understanding why the OS restricts raw socket access and how the Network Interface Card (NIC) handles promiscuous mode.
+
+Step 2: Unpacking the Ethernet Frame
+
+Task for Claude: "Update the script to unpack the first 14 bytes of the captured packet using the struct module. Extract and format the Destination MAC, Source MAC, and the EtherType protocol."
+
+Architecture Focus: Endianness (network byte order) and hexadecimal representation.
+
+Step 3: Unpacking the IP Header
+
+Task for Claude: "If the EtherType indicates an IPv4 packet, write a function to unpack the next 20 bytes (the IP header). Extract the Time to Live (TTL), Protocol (TCP/UDP/ICMP), Source IP, and Destination IP."
+
+Architecture Focus: Bitwise operations, understanding packet encapsulation (the "Russian doll" model of networking).
+
+Step 4: Unpacking the Transport Layer (TCP/UDP)
+
+Task for Claude: "If the IP protocol is TCP, unpack the TCP header. Extract the Source Port, Destination Port, Sequence Number, and Acknowledgment Number. Format the final output cleanly in the terminal."
+
+Architecture Focus: Differentiating between network routing (IP) and application-to-application communication (Ports).
